@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:#FDFAF5;position:relative;overflow:hidden}
+
+/* Curved accent line — like Wispr */
+body::before{
+  content:'';position:absolute;top:-120px;right:-200px;width:800px;height:800px;
+  border-radius:50%;border:2px solid rgba(201,167,235,0.25);pointer-events:none;z-index:0;
+}
+body::after{
+  content:'';position:absolute;bottom:-80px;left:-150px;width:600px;height:600px;
+  border-radius:50%;border:1.5px solid rgba(201,167,235,0.15);pointer-events:none;z-index:0;
+}
+
+.card{
+  position:relative;z-index:1;width:400px;
+  background:#fff;
+  border:1px solid #E8E4DD;
+  border-radius:20px;padding:48px 40px;
+  box-shadow:0 4px 24px rgba(26,29,28,0.06);
+  animation:fadeUp 0.5s ease;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+.logo{text-align:center;margin-bottom:36px}
+.logo-mark{
+  width:48px;height:48px;margin:0 auto 14px;
+  background:#F7F3EC;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+}
+.logo-mark svg{width:22px;height:22px;stroke:#4A4F4E;fill:none;stroke-width:1.5}
+.logo h1{font-family:'DM Serif Display',Georgia,serif;font-size:1.5rem;font-weight:400;color:#1A1D1C;letter-spacing:-0.5px}
+.logo p{color:#8A8F8E;font-size:0.82rem;margin-top:4px}
+
+/* Role toggle */
+.role-toggle{display:flex;background:#F7F3EC;border-radius:12px;padding:4px;margin-bottom:28px}
+.role-btn{flex:1;padding:11px;text-align:center;color:#8A8F8E;font-size:0.82rem;font-weight:600;
+  border:none;background:none;border-radius:9px;cursor:pointer;transition:all 0.25s;font-family:'Inter',sans-serif}
+.role-btn.active{background:#fff;color:#1A1D1C;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+.role-btn:hover:not(.active){color:#4A4F4E}
+
+.role-icon{display:none}
+
+/* Inputs */
+.field{margin-bottom:18px}
+.field label{display:block;color:#8A8F8E;font-size:0.7rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px}
+.field input{width:100%;padding:13px 16px;background:#FDFAF5;border:1.5px solid #E8E4DD;
+  border-radius:10px;color:#1A1D1C;font-size:0.9rem;font-family:'Inter',sans-serif;outline:none;
+  transition:all 0.25s}
+.field input:focus{border-color:#C9A7EB;background:#fff;box-shadow:0 0 0 3px rgba(201,167,235,0.1)}
+.field input::placeholder{color:#C5C1BA}
+
+.login-btn{width:100%;padding:14px;border:none;border-radius:50px;font-size:0.9rem;font-weight:600;
+  font-family:'Inter',sans-serif;cursor:pointer;margin-top:8px;
+  background:#1A1D1C;color:#fff;
+  transition:all 0.25s;letter-spacing:0.2px}
+.login-btn:hover{background:#2d3130;box-shadow:0 4px 16px rgba(26,29,28,0.12)}
+.login-btn:active{transform:scale(0.99)}
+.login-btn:disabled{opacity:0.4;cursor:not-allowed}
+
+.err-msg{color:#D94F4F;font-size:0.78rem;text-align:center;margin-top:14px;min-height:20px;
+  transition:opacity 0.3s;opacity:0}
+.err-msg.show{opacity:1}
+
+.demo-hint{text-align:center;margin-top:24px;color:#C5C1BA;font-size:0.7rem}
+.demo-hint span{color:#8A8F8E;font-weight:600}
+
+/* Decorative dot */
+.dot-deco{
+  position:absolute;width:8px;height:8px;border-radius:50%;background:rgba(201,167,235,0.3);
+  pointer-events:none;z-index:0;
+}
+</style>
+</head>
+<body>
+
+<div class="dot-deco" style="top:18%;left:12%"></div>
+<div class="dot-deco" style="top:72%;right:15%"></div>
+<div class="dot-deco" style="top:30%;right:22%;width:12px;height:12px;background:rgba(201,167,235,0.15)"></div>
+
+<div class="card">
+    <div class="logo">
+        <div class="logo-mark">
+            <svg viewBox="0 0 24 24"><path d="M12 2L3 7l9 5 9-5-9-5z"/><path d="M3 17l9 5 9-5"/><path d="M3 12l9 5 9-5"/></svg>
+        </div>
+        <h1>Lecture Assistant</h1>
+        <p>AI-powered study &amp; teaching hub</p>
+    </div>
+
+    <div class="role-toggle">
+        <button class="role-btn active" id="rbStudent" onclick="setRole('student')">Student</button>
+        <button class="role-btn" id="rbTeacher" onclick="setRole('teacher')">Teacher</button>
+    </div>
+
+    <div class="field">
+        <label>Username</label>
+        <input type="text" id="uname" placeholder="Enter username" autocomplete="off">
+    </div>
+    <div class="field">
+        <label>Password</label>
+        <input type="password" id="pass" placeholder="Enter password">
+    </div>
+
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">Sign in</button>
+    <div class="err-msg" id="err"></div>
+
+    <div class="demo-hint">
+        Demo &mdash; <span>student / student123</span> &nbsp;&middot;&nbsp; <span>teacher / teacher123</span>
+    </div>
+</div>
+
+<script>
+let role='student';
+
+function setRole(r){
+    role=r;
+    document.getElementById('rbStudent').classList.toggle('active',r==='student');
+    document.getElementById('rbTeacher').classList.toggle('active',r==='teacher');
+}
+
+document.getElementById('pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+document.getElementById('uname').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('pass').focus()});
+
+async function doLogin(){
+    const btn=document.getElementById('loginBtn');
+    const err=document.getElementById('err');
+    err.classList.remove('show');
+    btn.disabled=true;btn.textContent='Signing in...';
+
+    try{
+        const r=await fetch('/login',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+                username:document.getElementById('uname').value,
+                password:document.getElementById('pass').value,
+                role:role
+            })
+        });
+        const d=await r.json();
+        if(d.ok){
+            window.location.href=d.redirect;
+        }else{
+            err.textContent=d.error||'Invalid credentials';
+            err.classList.add('show');
+            btn.disabled=false;btn.textContent='Sign in';
+        }
+    }catch(e){
+        err.textContent='Connection error';
+        err.classList.add('show');
+        btn.disabled=false;btn.textContent='Sign in';
+    }
+}
+</script>
+</body>
+</html>

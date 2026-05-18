@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lecture Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+    <div class="header">
+        <h1>Lecture Assistant</h1>
+        <p>Upload audio → transcript, notes, key concepts, quiz</p>
+        <div class="header-line"></div>
+    </div>
+
+    <!-- Upload -->
+    <div class="upload" id="drop">
+        <div class="upload-icon">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="upload-label">Drop audio file or click to browse</div>
+        <div class="upload-hint">MP3, WAV, M4A — up to 100MB</div>
+        <input type="file" id="fin" accept="audio/*">
+        <span class="file-tag" id="ftag"></span>
+    </div>
+
+    <button class="btn" id="go" disabled>Process Lecture</button>
+
+    <!-- Progress -->
+    <div class="progress" id="prog">
+        <span class="plabel" id="plabel">Transcribing audio...</span>
+        <div class="pbar"><div class="pfill" id="pfill"></div></div>
+    </div>
+
+    <div class="err" id="err"></div>
+
+    <!-- Results -->
+    <div class="out" id="out">
+
+        <!-- Transcript -->
+        <div class="section">
+            <div class="section-label"><span class="dot-indicator"></span> Transcript</div>
+            <div class="section-box" id="txOut"></div>
+        </div>
+
+        <!-- Notes -->
+        <div class="section">
+            <div class="section-label"><span class="dot-indicator"></span> Notes</div>
+            <div class="section-box" id="ntOut"></div>
+        </div>
+
+        <!-- Energy Profile -->
+        <div class="section" id="toneSection" style="display:none">
+            <div class="section-label"><span class="dot-indicator" style="background:var(--orange)"></span> Voice Energy Profile</div>
+            <div class="energy-box">
+                <canvas id="energyChart"></canvas>
+                <div class="energy-footer">
+                    <span>0:00</span>
+                    <span class="energy-legend"><span class="legend-dot high"></span> High energy <span class="legend-dot avg"></span> Normal <span class="legend-dot low"></span> Low</span>
+                    <span id="durLabel">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Teacher Emphasis -->
+        <div class="section" id="emphSection" style="display:none">
+            <div class="section-label"><span class="dot-indicator" style="background:var(--red)"></span> Teacher Emphasis Detected</div>
+            <div class="emphasis-list" id="emphOut"></div>
+        </div>
+
+        <!-- Key Concepts -->
+        <div class="section" id="conceptSection">
+            <div class="section-label"><span class="dot-indicator"></span> Key Concepts</div>
+            <div class="concepts-grid" id="kwOut"></div>
+        </div>
+
+        <!-- Definitions -->
+        <div class="section" id="defSection" style="display:none">
+            <div class="section-label"><span class="dot-indicator" style="background:var(--accent-2)"></span> Definitions Detected</div>
+            <div class="section-box">
+                <ul class="def-list" id="defOut"></ul>
+            </div>
+        </div>
+
+        <!-- Quiz -->
+        <div class="quiz-start" id="qstart">
+            <h3>Quiz</h3>
+            <p>Test yourself with AI-generated questions</p>
+            <div class="timer-row">
+                <label>Time per question</label>
+                <input type="number" class="timer-field" id="tfield" value="30" min="10" max="120" step="5">
+                <span class="timer-unit">sec</span>
+            </div>
+            <button class="btn btn-accent" id="qgo" style="max-width:200px;margin:0 auto">Start Quiz</button>
+        </div>
+    </div>
+</div>
+
+<!-- Quiz overlay -->
+<div class="overlay" id="ov">
+    <div class="modal">
+        <div id="qwrap">
+            <div class="modal-top">
+                <div>
+                    <h4>Quiz</h4>
+                    <span id="qcnt">Question 1 of 5</span>
+                </div>
+                <div class="timer-pill" id="tpill">30</div>
+            </div>
+            <div class="dots" id="dots"></div>
+            <div class="modal-body">
+                <div class="q-text" id="qtxt"></div>
+                <div class="opts" id="opts"></div>
+            </div>
+        </div>
+        <div class="score-view" id="sview" style="display:none">
+            <div class="score-big" id="snum">0</div>
+            <div class="score-sub">out of <span id="stot">5</span></div>
+            <div class="score-msg" id="smsg"></div>
+            <div class="score-btns">
+                <button class="btn btn-outline" id="sclose">Close</button>
+                <button class="btn" id="sretry">Try Again</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let file=null,qs=[],ci=0,sc=0,tmr=null,dur=30,tl=30,locked=false,res=[];
+let pendingTone=null; // store tone data to render AFTER DOM is visible
+const $=id=>document.getElementById(id);
+
+// Upload
+$('drop').onclick=()=>$('fin').click();
+$('drop').ondragover=e=>{e.preventDefault();$('drop').classList.add('over')};
+$('drop').ondragleave=()=>$('drop').classList.remove('over');
+$('drop').ondrop=e=>{e.preventDefault();$('drop').classList.remove('over');if(e.dataTransfer.files[0]?.type.startsWith('audio/'))pick(e.dataTransfer.files[0])};
+$('fin').onchange=()=>{if($('fin').files[0])pick($('fin').files[0])};
+
+function pick(f){
+    file=f;$('ftag').textContent=f.name;$('ftag').style.display='inline-block';
+    $('go').disabled=false;$('err').classList.remove('on');
+}
+
+// Process
+$('go').onclick=async()=>{
+    if(!file)return;
+    $('out').classList.remove('on');$('qstart').classList.remove('on');$('err').classList.remove('on');
+    $('go').disabled=true;$('go').innerHTML='<span class="spin"></span>Processing...';
+    $('prog').classList.add('on');$('plabel').textContent='Transcribing audio...';$('pfill').style.width='10%';
+
+    const fd=new FormData();fd.append('audio',file);
+    try{
+        $('pfill').style.width='20%';$('plabel').textContent='Processing — this may take a minute...';
+        const r=await fetch('/upload',{method:'POST',body:fd});
+        $('pfill').style.width='90%';
+        if(!r.ok){const e=await r.json();throw new Error(e.error||'Server error');}
+        const d=await r.json();
+        $('pfill').style.width='100%';
+
+        setTimeout(()=>{
+            $('txOut').textContent=d.transcript;
+            $('ntOut').innerHTML=fmtNotes(d.notes);
+
+            // Store tone data — render AFTER out section is visible
+            pendingTone=d.tone;
+
+            renderConcepts(d.concepts);
+            qs=d.questions;
+
+            $('out').classList.add('on');
+            if(qs.length>0)$('qstart').classList.add('on');
+            $('prog').classList.remove('on');
+            $('go').innerHTML='Process Lecture';$('go').disabled=false;
+
+            // Render chart after DOM is visible (requestAnimationFrame ensures layout)
+            requestAnimationFrame(()=>{
+                requestAnimationFrame(()=>{
+                    if(pendingTone){
+                        renderTone(pendingTone);
+                        renderEmphasis(pendingTone);
+                    }
+                });
+            });
+        },200);
+    }catch(e){
+        $('err').textContent=e.message;$('err').classList.add('on');$('prog').classList.remove('on');
+        $('go').innerHTML='Process Lecture';$('go').disabled=false;
+    }
+};
+
+function fmtNotes(t){
+    return t
+        .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+        .replace(/^\* /gm,'• ').replace(/^- /gm,'• ')
+        .replace(/^### (.*$)/gm,'<div style="font-weight:600;margin-top:10px;margin-bottom:3px;font-size:0.9rem">$1</div>')
+        .replace(/^## (.*$)/gm,'<div style="font-weight:600;margin-top:14px;margin-bottom:4px;font-size:0.95rem">$1</div>')
+        .replace(/^# (.*$)/gm,'<div style="font-weight:700;font-size:1rem;margin-top:16px;margin-bottom:6px">$1</div>')
+        .replace(/\n/g,'<br>');
+}
+
+// === Energy Chart ===
+function renderTone(tone){
+    if(!tone||!tone.energy_profile||tone.energy_profile.length<3)return;
+
+    $('toneSection').style.display='block';
+    $('durLabel').textContent=fmtTime(tone.duration);
+
+    // Delay slightly so the section is fully laid out
+    setTimeout(()=>{
+        const canvas=$('energyChart');
+        const container=canvas.parentElement;
+        const W=container.clientWidth-24; // account for padding
+        const H=100;
+
+        if(W<=0)return; // safety
+
+        const dpr=window.devicePixelRatio||1;
+        canvas.width=W*dpr;
+        canvas.height=H*dpr;
+        canvas.style.width=W+'px';
+        canvas.style.height=H+'px';
+
+        const ctx=canvas.getContext('2d');
+        ctx.scale(dpr,dpr);
+        ctx.clearRect(0,0,W,H);
+
+        const data=tone.energy_profile;
+        const maxE=Math.max(...data.map(d=>d.energy),1);
+        const avgE=tone.avg_energy;
+
+        // Average line
+        const avgY=H-((avgE/maxE)*(H*0.85))-5;
+        ctx.strokeStyle='#d6d3d1';
+        ctx.lineWidth=1;
+        ctx.setLineDash([4,4]);
+        ctx.beginPath();ctx.moveTo(0,avgY);ctx.lineTo(W,avgY);ctx.stroke();
+        ctx.setLineDash([]);
+
+        // "avg" label
+        ctx.fillStyle='#a8a29e';ctx.font='9px "Space Mono",monospace';
+        ctx.fillText('avg',W-22,avgY-4);
+
+        // Bars
+        const gap=2;
+        const barW=Math.max((W-gap*(data.length-1))/data.length, 3);
+
+        data.forEach((d,i)=>{
+            const x=i*(barW+gap);
+            const h=Math.max((d.energy/maxE)*(H*0.85), 2);
+            const y=H-h;
+
+            if(d.energy>avgE*1.25){
+                ctx.fillStyle='rgba(220,38,38,0.55)'; // red = high energy
+            }else if(d.energy>avgE*0.85){
+                ctx.fillStyle='rgba(14,184,166,0.45)'; // teal = normal
+            }else{
+                ctx.fillStyle='rgba(168,162,158,0.25)'; // grey = low
+            }
+
+            const r=Math.min(barW/2,3);
+            ctx.beginPath();
+            ctx.moveTo(x+r,y);ctx.lineTo(x+barW-r,y);
+            ctx.quadraticCurveTo(x+barW,y,x+barW,y+r);
+            ctx.lineTo(x+barW,H);ctx.lineTo(x,H);
+            ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+            ctx.fill();
+        });
+    },50);
+}
+
+function renderEmphasis(tone){
+    if(!tone.emphasized_segments||tone.emphasized_segments.length===0){
+        $('emphSection').style.display='none';return;
+    }
+    $('emphSection').style.display='block';
+    const el=$('emphOut');el.innerHTML='';
+
+    tone.emphasized_segments.forEach(seg=>{
+        const card=document.createElement('div');card.className='emphasis-card';
+        const pct=Math.round(seg.emphasis_score);
+        const color=pct>50?'var(--red)':pct>35?'var(--orange)':'var(--accent)';
+        card.innerHTML=`
+            <div class="emph-text">"${seg.text}"</div>
+            <div class="emph-meta">
+                <span class="emph-time">${fmtTime(seg.start)} — ${fmtTime(seg.end)}</span>
+                <span class="emph-score" style="color:${color}">Emphasis: ${pct}%</span>
+            </div>`;
+        el.appendChild(card);
+    });
+}
+
+function fmtTime(s){const m=Math.floor(s/60);const sec=Math.floor(s%60);return `${m}:${sec.toString().padStart(2,'0')}`;}
+
+// === Concepts ===
+function renderConcepts(c){
+    if(!c)return;
+    const grid=$('kwOut');grid.innerHTML='';
+    const maxScore=c.keywords[0]?.score||1;
+
+    c.keywords.forEach(k=>{
+        const card=document.createElement('div');
+        card.className='concept-card'+(k.emphasized?' concept-emph':'');
+        card.innerHTML=`
+            <div class="concept-term">${k.term}${k.emphasized?'<span class="emph-badge">EMPHASIZED</span>':''}</div>
+            <div class="concept-meta">${k.count}× mentioned${k.emphasized?' · teacher stressed':''}${k.score>3?' · high frequency':''}</div>
+            <div class="concept-bar"><div class="concept-fill" style="width:${(k.score/maxScore)*100}%"></div></div>`;
+        grid.appendChild(card);
+    });
+
+    if(c.definitions&&c.definitions.length>0){
+        $('defSection').style.display='block';
+        const ul=$('defOut');ul.innerHTML='';
+        c.definitions.forEach(d=>{const li=document.createElement('li');li.textContent=d;ul.appendChild(li);});
+    }else{$('defSection').style.display='none';}
+}
+
+// === Quiz ===
+$('qgo').onclick=()=>{dur=Math.max(10,Math.min(120,parseInt($('tfield').value)||30));startQ();};
+
+function startQ(){ci=0;sc=0;res=[];$('qwrap').style.display='block';$('sview').style.display='none';$('ov').classList.add('on');document.body.style.overflow='hidden';show();}
+
+function show(){
+    if(ci>=qs.length){showSc();return;}
+    locked=false;const q=qs[ci];
+    $('qcnt').textContent=`Question ${ci+1} of ${qs.length}`;$('stot').textContent=qs.length;
+    $('dots').innerHTML='';
+    for(let i=0;i<qs.length;i++){const d=document.createElement('div');d.className='dot';if(i<ci)d.classList.add(res[i]?'ok':'no');if(i===ci)d.classList.add('active');$('dots').appendChild(d);}
+    $('qtxt').textContent=q.question;$('opts').innerHTML='';
+    ['A','B','C','D'].forEach((l,i)=>{
+        const b=document.createElement('button');b.className='opt';
+        b.innerHTML=`<span class="opt-l">${l}</span><span>${q.options[i]}</span>`;
+        b.onclick=()=>ans(b,q.options[i],q.answer);$('opts').appendChild(b);});
+    startTmr();
+}
+
+function ans(btn,picked,correct){
+    if(locked)return;locked=true;clearInterval(tmr);
+    const all=$('opts').querySelectorAll('.opt');
+    if(picked===correct){btn.classList.add('right');sc++;res.push(true);}
+    else{btn.classList.add('wrong');res.push(false);all.forEach(b=>{if(b.querySelector('span:last-child').textContent===correct)b.classList.add('right');});}
+    all.forEach(b=>b.style.pointerEvents='none');
+    setTimeout(()=>{ci++;show();},1200);
+}
+
+function startTmr(){
+    tl=dur;$('tpill').textContent=tl;$('tpill').className='timer-pill';
+    tmr=setInterval(()=>{
+        tl--;$('tpill').textContent=tl;
+        if(tl<=5)$('tpill').className='timer-pill crit';
+        else if(tl<=10)$('tpill').className='timer-pill warn';
+        if(tl<=0){clearInterval(tmr);if(!locked){locked=true;res.push(false);
+            const q=qs[ci];$('opts').querySelectorAll('.opt').forEach(b=>{b.style.pointerEvents='none';if(b.querySelector('span:last-child').textContent===q.answer)b.classList.add('right');});
+            setTimeout(()=>{ci++;show();},1200);}}
+    },1000);
+}
+
+function showSc(){
+    clearInterval(tmr);$('qwrap').style.display='none';$('sview').style.display='block';$('snum').textContent=sc;
+    const p=sc/qs.length*100;
+    $('smsg').textContent=p===100?'Perfect!':p>=80?'Excellent!':p>=60?'Good job!':p>=40?'Keep studying.':'Try again.';
+}
+
+$('sretry').onclick=startQ;$('sclose').onclick=closeQ;
+document.onkeydown=e=>{if(e.key==='Escape')closeQ()};
+function closeQ(){$('ov').classList.remove('on');document.body.style.overflow='';clearInterval(tmr);}
+</script>
+</body>
+</html>

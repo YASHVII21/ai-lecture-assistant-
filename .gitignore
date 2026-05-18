@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+.conda/
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Uploads and data (user-generated)
+uploads/
+data/*.json
+
+# Audio/Video files
+*.mp3
+*.wav
+*.m4a
+*.webm
+*.mp4
+*.ogg
+
+# Whisper model cache
+*.pt
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Documentation build artifacts
+*.docx
+
+# Misc
+*.bak
+*.tmp

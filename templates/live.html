@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Lecture — Lecture Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<nav class="navbar">
+    <div class="nav-left">
+        <span class="nav-brand">Lecture Assistant</span>
+        <span class="nav-badge {{ role }}">{{ role | capitalize }}</span>
+        <span class="live-badge" id="liveBadge" style="display:none">
+            <span class="live-dot"></span>LIVE
+        </span>
+    </div>
+    <div class="nav-right">
+        <span class="nav-user">{{ name }}</span>
+        <a href="/{{ role }}" class="nav-logout">← Dashboard</a>
+    </div>
+</nav>
+
+<div class="app">
+
+    <!-- ═══ TEACHER: Setup View ═══ -->
+    {% if role == 'teacher' %}
+    <div id="setupView">
+        <div class="hero-section">
+            <h2>Start a Live Lecture</h2>
+            <p>Create a session and students can join with the code. Your microphone will be captured and processed in real-time.</p>
+        </div>
+
+        <div class="live-setup-card">
+            <div class="setup-icon">
+                <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" fill="none" stroke-width="1.5">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+            </div>
+            <h3>Ready to go live?</h3>
+            <p>You'll need to allow microphone access when prompted.</p>
+            <button class="btn-primary" id="createBtn" onclick="createSession()">Create Live Session</button>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ═══ STUDENT: Join View ═══ -->
+    {% if role == 'student' %}
+    <div id="joinView">
+        <div class="hero-section">
+            <h2>Join Live Lecture</h2>
+            <p>Enter the session code shared by your teacher.</p>
+        </div>
+
+        <div class="live-setup-card">
+            <div class="setup-icon">
+                <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" fill="none" stroke-width="1.5">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+            </div>
+            <h3>Enter Session Code</h3>
+            <div class="code-input-wrap">
+                <input type="text" class="code-input" id="codeInput" maxlength="4" placeholder="0000" autocomplete="off">
+            </div>
+            <div class="err-banner" id="joinErr" style="display:none"></div>
+            <button class="btn-primary" id="joinBtn" onclick="joinSession()">Join Session</button>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ═══ LIVE SESSION VIEW (both roles) ═══ -->
+    <div id="liveView" style="display:none">
+
+        <!-- Teacher control bar -->
+        {% if role == 'teacher' %}
+        <div class="live-control-bar" id="controlBar">
+            <div class="control-left">
+                <div class="session-code-display">
+                    <span class="code-label">Session Code</span>
+                    <span class="code-value" id="codeDisplay">—</span>
+                </div>
+                <div class="control-stat">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="1.5">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                    </svg>
+                    <span id="studentCount">0</span> students
+                </div>
+                <div class="control-stat">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span id="elapsed">0:00</span>
+                </div>
+            </div>
+            <div class="control-right">
+                <button class="btn-rec" id="recBtn" onclick="toggleRecording()">
+                    <span class="rec-dot" id="recDot"></span>
+                    <span id="recLabel">Start Recording</span>
+                </button>
+                <button class="btn-outline btn-sm" id="notesBtn" onclick="requestNotes()" style="display:none">Generate Notes</button>
+                <button class="btn-outline btn-sm" id="quizBtn" onclick="sendQuiz()" style="display:none;background:#6C5CE7;color:#fff;border-color:#6C5CE7">Send Quiz</button>
+                <button class="btn-danger btn-sm" id="endBtn" onclick="endSession()" style="display:none">End Lecture</button>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Student session info -->
+        {% if role == 'student' %}
+        <div class="live-session-info">
+            <div class="session-teacher">
+                <span>Lecture by</span>
+                <strong id="teacherName">—</strong>
+            </div>
+            <div class="control-stat">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="1.5">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                </svg>
+                <span id="studentCount">0</span> students
+            </div>
+            <div class="control-stat">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span id="elapsed">0:00</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Live panels grid -->
+        <div class="live-grid">
+            <!-- Left column: Transcript -->
+            <div class="live-panel live-panel-transcript">
+                <div class="live-panel-head">
+                    <span>Live Transcript</span>
+                    <span class="chunk-count" id="chunkBadge">0 chunks</span>
+                </div>
+                <div class="live-transcript-body" id="transcriptBody">
+                    <div class="live-placeholder">Waiting for audio...</div>
+                </div>
+            </div>
+
+            <!-- Right column: Concepts + Emphasis + Notes -->
+            <div class="live-panel-stack">
+
+                <!-- Key Concepts -->
+                <div class="live-panel">
+                    <div class="live-panel-head">
+                        <span>Key Concepts</span>
+                    </div>
+                    <div class="live-concepts-body" id="conceptsBody">
+                        <div class="live-placeholder">Concepts will appear as the lecture progresses...</div>
+                    </div>
+                </div>
+
+                <!-- Teacher Emphasis -->
+                <div class="live-panel">
+                    <div class="live-panel-head">
+                        <span>Teacher Emphasis</span>
+                    </div>
+                    <div class="live-emphasis-body" id="emphasisBody">
+                        <div class="live-placeholder">Emphasis detection will start soon...</div>
+                    </div>
+                </div>
+
+                <!-- AI Notes -->
+                <div class="live-panel">
+                    <div class="live-panel-head">
+                        <span>AI Study Notes</span>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <button class="btn-sm btn-outline" id="downloadPdfBtn" onclick="downloadPDF()" style="display:none;font-size:0.7rem;padding:3px 10px">Download PDF</button>
+                            <span class="notes-status" id="notesStatus">Waiting...</span>
+                        </div>
+                    </div>
+                    <div class="live-notes-body" id="notesBody">
+                        <div class="live-placeholder">Notes generate automatically every ~60 seconds...</div>
+                    </div>
+                </div>
+
+                <!-- Quiz Scores (Teacher only) -->
+                {% if role == 'teacher' %}
+                <div class="live-panel" id="quizScoresPanel" style="display:none">
+                    <div class="live-panel-head">
+                        <span>Live Quiz Results</span>
+                        <span class="chunk-count" id="quizResponseCount">0 responses</span>
+                    </div>
+                    <div class="live-quiz-scores" id="quizScoresBody">
+                        <div class="live-placeholder">Waiting for student responses...</div>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Quiz Modal Overlay (Students) -->
+    <div class="overlay" id="quizOverlay">
+        <div class="quiz-modal">
+            <div class="quiz-modal-head">
+                <h2>Live Quiz</h2>
+                <p>Answer the questions based on the lecture</p>
+            </div>
+            <div id="quizQuestions"></div>
+            <div id="quizResultView" style="display:none"></div>
+            <div class="quiz-modal-footer">
+                <button class="btn-primary" id="submitQuizBtn" onclick="submitQuiz()">Submit Answers</button>
+                <button class="btn-outline" id="closeQuizBtn" onclick="closeQuiz()" style="display:none">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session ended overlay -->
+    <div class="overlay" id="endOverlay">
+        <div class="quiz-modal" style="text-align:center;padding:48px">
+            <h2 style="font-family:var(--serif);font-weight:400;margin-bottom:8px">Lecture Ended</h2>
+            <p style="color:var(--text-3);margin-bottom:24px">The live session has been concluded.</p>
+            <a href="/{{ role }}" class="btn-primary" style="display:inline-flex;width:auto">Back to Dashboard</a>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const ROLE = '{{ role }}';
+const USER_NAME = '{{ name }}';
+const $ = id => document.getElementById(id);
+
+let socket = null;
+let sessionCode = null;
+let mediaRecorder = null;
+let recordingStream = null;
+let isRecording = false;
+let elapsedInterval = null;
+let startTime = null;
+let chunkCount = 0;
+
+// ── Socket.IO Connection ──
+function initSocket() {
+    socket = io({transports: ['websocket', 'polling']});
+
+    socket.on('connect', () => {
+        console.log('Connected to server');
+        if (sessionCode) {
+            if (ROLE === 'teacher') {
+                socket.emit('teacher_join', {code: sessionCode});
+            } else {
+                socket.emit('student_join', {code: sessionCode, name: USER_NAME});
+            }
+        }
+    });
+
+    socket.on('disconnect', () => console.log('Disconnected'));
+
+    // Transcript updates
+    socket.on('transcript_update', data => {
+        chunkCount = data.chunk_num || chunkCount + 1;
+        $('chunkBadge').textContent = chunkCount + ' chunks';
+        appendTranscript(data.chunk_text);
+    });
+
+    // Concept updates
+    socket.on('concepts_update', data => {
+        renderLiveConcepts(data);
+    });
+
+    // Emphasis updates
+    socket.on('emphasis_update', data => {
+        renderLiveEmphasis(data);
+    });
+
+    // Notes updates
+    socket.on('notes_update', data => {
+        renderLiveNotes(data.notes);
+    });
+
+    // Student joined/left
+    socket.on('student_joined', data => {
+        $('studentCount').textContent = data.count;
+    });
+    socket.on('student_left', data => {
+        $('studentCount').textContent = data.count;
+    });
+
+    // Quiz events
+    socket.on('live_quiz', data => {
+        renderQuizModal(data.questions);
+    });
+    socket.on('quiz_result', data => {
+        showQuizResult(data);
+    });
+    socket.on('quiz_scores', data => {
+        renderQuizScores(data.responses);
+    });
+    socket.on('quiz_status', data => {
+        if (data.error) alert(data.error);
+    });
+
+    // Session state (for student joining mid-lecture)
+    socket.on('session_state', data => {
+        if (data.transcript) {
+            $('transcriptBody').innerHTML = '';
+            appendTranscript(data.transcript);
+        }
+        if (data.concepts) renderLiveConcepts(data.concepts);
+        if (data.notes) renderLiveNotes(data.notes);
+        if (data.tone) renderLiveEmphasis(data.tone);
+    });
+
+    // Session ended
+    socket.on('session_ended', () => {
+        isRecording = false;
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        if (recordingStream) recordingStream.getTracks().forEach(t => t.stop());
+        clearInterval(elapsedInterval);
+        $('endOverlay').classList.add('on');
+    });
+
+    // Join confirmation
+    socket.on('joined', data => {
+        console.log('Joined room:', data.code);
+    });
+
+    socket.on('join_error', data => {
+        alert(data.error || 'Failed to join');
+    });
+}
+
+// ── Teacher: Create Session ──
+async function createSession() {
+    $('createBtn').disabled = true;
+    $('createBtn').textContent = 'Creating...';
+    try {
+        const r = await fetch('/api/live/create', {method: 'POST'});
+        const d = await r.json();
+        if (d.ok) {
+            sessionCode = d.code;
+            showLiveView();
+            $('codeDisplay').textContent = sessionCode;
+            initSocket();
+            socket.emit('teacher_join', {code: sessionCode});
+        } else {
+            alert(d.error || 'Failed to create session');
+            $('createBtn').disabled = false;
+            $('createBtn').textContent = 'Create Live Session';
+        }
+    } catch (e) {
+        alert('Connection error');
+        $('createBtn').disabled = false;
+        $('createBtn').textContent = 'Create Live Session';
+    }
+}
+
+// ── Student: Join Session ──
+async function joinSession() {
+    const code = $('codeInput').value.trim();
+    if (code.length !== 4) {
+        $('joinErr').textContent = 'Enter a 4-digit code';
+        $('joinErr').style.display = 'block';
+        return;
+    }
+    $('joinBtn').disabled = true;
+    $('joinBtn').textContent = 'Joining...';
+    $('joinErr').style.display = 'none';
+    try {
+        const r = await fetch('/api/live/join', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({code: code})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            sessionCode = d.code;
+            showLiveView();
+            $('teacherName').textContent = d.teacher_name;
+            initSocket();
+            socket.emit('student_join', {code: sessionCode, name: USER_NAME});
+            startTimer();
+        } else {
+            $('joinErr').textContent = d.error || 'Session not found';
+            $('joinErr').style.display = 'block';
+            $('joinBtn').disabled = false;
+            $('joinBtn').textContent = 'Join Session';
+        }
+    } catch (e) {
+        $('joinErr').textContent = 'Connection error';
+        $('joinErr').style.display = 'block';
+        $('joinBtn').disabled = false;
+        $('joinBtn').textContent = 'Join Session';
+    }
+}
+
+function showLiveView() {
+    const setup = $('setupView') || $('joinView');
+    if (setup) setup.style.display = 'none';
+    $('liveView').style.display = 'block';
+    $('liveBadge').style.display = 'inline-flex';
+}
+
+// ── Teacher: Recording Controls ──
+let chunkInterval = null;
+
+async function toggleRecording() {
+    if (!isRecording) {
+        try {
+            recordingStream = await navigator.mediaDevices.getUserMedia({audio: true});
+            isRecording = true;
+            $('recDot').classList.add('recording');
+            $('recLabel').textContent = 'Stop Recording';
+            $('recBtn').classList.add('active');
+            $('notesBtn').style.display = 'inline-flex';
+            $('quizBtn').style.display = 'inline-flex';
+            $('endBtn').style.display = 'inline-flex';
+            $('transcriptBody').innerHTML = '<div class="live-placeholder pulse-text">Listening...</div>';
+            startTimer();
+
+            // Start the first recorder
+            startNewRecorder();
+
+            // Every 10 seconds: stop current recorder (triggers ondataavailable with full webm),
+            // then start a fresh one so the next chunk also gets a proper header
+            chunkInterval = setInterval(() => {
+                if (!isRecording) return;
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop(); // triggers ondataavailable with complete webm
+                }
+                // Start a new recorder after a tiny delay
+                setTimeout(() => {
+                    if (isRecording) startNewRecorder();
+                }, 100);
+            }, 10000);
+
+        } catch (e) {
+            alert('Microphone access denied. Please allow microphone access and try again.');
+        }
+    } else {
+        isRecording = false;
+        clearInterval(chunkInterval);
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        if (recordingStream) recordingStream.getTracks().forEach(t => t.stop());
+        $('recDot').classList.remove('recording');
+        $('recLabel').textContent = 'Start Recording';
+        $('recBtn').classList.remove('active');
+    }
+}
+
+function startNewRecorder() {
+    if (!recordingStream || !isRecording) return;
+    mediaRecorder = new MediaRecorder(recordingStream, {mimeType: 'audio/webm;codecs=opus'});
+    mediaRecorder.ondataavailable = async (e) => {
+        if (e.data.size > 0 && socket && socket.connected) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64 = reader.result.split(',')[1];
+                socket.emit('audio_chunk', {
+                    code: sessionCode,
+                    audio: base64
+                });
+            };
+            reader.readAsDataURL(e.data);
+        }
+    };
+    mediaRecorder.start(); // No timeslice — we stop() it manually via the interval
+}
+
+function startTimer() {
+    startTime = Date.now();
+    elapsedInterval = setInterval(() => {
+        const diff = Math.floor((Date.now() - startTime) / 1000);
+        const m = Math.floor(diff / 60);
+        const s = diff % 60;
+        $('elapsed').textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    }, 1000);
+}
+
+function requestNotes() {
+    if (socket && sessionCode) {
+        $('notesStatus').textContent = 'Generating...';
+        socket.emit('request_notes', {code: sessionCode});
+    }
+}
+
+function endSession() {
+    if (!confirm('End the live lecture? This cannot be undone.')) return;
+    isRecording = false;
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    if (recordingStream) recordingStream.getTracks().forEach(t => t.stop());
+    clearInterval(elapsedInterval);
+    socket.emit('end_session', {code: sessionCode});
+    $('endOverlay').classList.add('on');
+}
+
+// ── Render Functions ──
+
+function appendTranscript(text) {
+    const body = $('transcriptBody');
+    // Remove placeholder
+    const ph = body.querySelector('.live-placeholder');
+    if (ph) ph.remove();
+
+    const span = document.createElement('span');
+    span.className = 'transcript-chunk new';
+    span.textContent = text + ' ';
+    body.appendChild(span);
+    // Animate in
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => span.classList.remove('new'));
+    });
+    // Auto-scroll
+    body.scrollTop = body.scrollHeight;
+}
+
+function renderLiveConcepts(data) {
+    const body = $('conceptsBody');
+    if (!data || !data.keywords || data.keywords.length === 0) return;
+    body.innerHTML = '';
+    const maxScore = data.keywords[0]?.score || 1;
+    data.keywords.slice(0, 10).forEach(k => {
+        const tag = document.createElement('div');
+        tag.className = 'live-concept-tag' + (k.emphasized ? ' emphasized' : '');
+        const barWidth = Math.max(20, (k.score / maxScore) * 100);
+        tag.innerHTML = `
+            <div class="lc-term">${k.term}${k.emphasized ? '<span class="emph-badge">EMPHASIZED</span>' : ''}</div>
+            <div class="lc-bar"><div class="lc-fill" style="width:${barWidth}%"></div></div>
+            <div class="lc-count">${k.count}×</div>`;
+        body.appendChild(tag);
+    });
+
+    // Show definitions if any
+    if (data.definitions && data.definitions.length > 0) {
+        const defDiv = document.createElement('div');
+        defDiv.className = 'live-defs';
+        defDiv.innerHTML = '<div class="lc-def-head">Definitions</div>';
+        data.definitions.slice(0, 4).forEach(d => {
+            const p = document.createElement('p');
+            p.className = 'lc-def';
+            p.textContent = d;
+            defDiv.appendChild(p);
+        });
+        body.appendChild(defDiv);
+    }
+}
+
+function renderLiveEmphasis(data) {
+    const body = $('emphasisBody');
+    if (!data || !data.emphasized_segments || data.emphasized_segments.length === 0) return;
+    body.innerHTML = '';
+    data.emphasized_segments.slice(0, 5).forEach(seg => {
+        const card = document.createElement('div');
+        card.className = 'live-emph-card';
+        const pct = Math.round(seg.emphasis_score);
+        const color = pct > 50 ? '#D94F4F' : pct > 35 ? '#E89B3E' : '#9B6BC6';
+        card.innerHTML = `
+            <div class="emph-quote">"${seg.text}"</div>
+            <div class="emph-meta">
+                <span class="emph-time">${fmtTime(seg.start)} — ${fmtTime(seg.end)}</span>
+                <span class="emph-score"><span class="emph-dot" style="background:${color}"></span>${pct}%</span>
+            </div>`;
+        body.appendChild(card);
+    });
+}
+
+function renderLiveNotes(notes) {
+    if (!notes) return;
+    $('notesStatus').textContent = 'Updated';
+    $('downloadPdfBtn').style.display = 'inline-flex';
+    setTimeout(() => $('notesStatus').textContent = '', 3000);
+    const body = $('notesBody');
+    body.innerHTML = notes
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^\* /gm, '• ').replace(/^- /gm, '• ')
+        .replace(/^### (.*$)/gm, '<div class="note-h3">$1</div>')
+        .replace(/^## (.*$)/gm, '<div class="note-h2">$1</div>')
+        .replace(/^# (.*$)/gm, '<div class="note-h1">$1</div>')
+        .replace(/\n/g, '<br>');
+    body.classList.add('notes-flash');
+    setTimeout(() => body.classList.remove('notes-flash'), 600);
+}
+
+function fmtTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// ── Quiz Functions ──
+let quizQuestions = [];
+let quizAnswers = [];
+
+function sendQuiz() {
+    if (!socket || !sessionCode) return;
+    $('quizBtn').disabled = true;
+    $('quizBtn').textContent = 'Generating...';
+    socket.emit('send_quiz', {code: sessionCode});
+    // Re-enable after 10s
+    setTimeout(() => {
+        $('quizBtn').disabled = false;
+        $('quizBtn').textContent = 'Send Quiz';
+    }, 10000);
+}
+
+function renderQuizModal(questions) {
+    quizQuestions = questions;
+    quizAnswers = new Array(questions.length).fill('');
+    const container = $('quizQuestions');
+    container.innerHTML = '';
+    $('quizResultView').style.display = 'none';
+    $('submitQuizBtn').style.display = 'inline-flex';
+    $('closeQuizBtn').style.display = 'none';
+
+    questions.forEach((q, i) => {
+        const card = document.createElement('div');
+        card.className = 'quiz-card';
+        const qNumDiv = document.createElement('div');
+        qNumDiv.className = 'quiz-q-num';
+        qNumDiv.innerHTML = `Q${i+1} <span class="quiz-topic">${escapeHtml(q.topic)}</span>`;
+        card.appendChild(qNumDiv);
+
+        const qTextDiv = document.createElement('div');
+        qTextDiv.className = 'quiz-q-text';
+        qTextDiv.textContent = q.question;
+        card.appendChild(qTextDiv);
+
+        const optsDiv = document.createElement('div');
+        optsDiv.className = 'quiz-options';
+        optsDiv.id = 'qOpts' + i;
+        q.options.forEach((opt, j) => {
+            const label = document.createElement('label');
+            label.className = 'quiz-opt';
+            label.id = `qOpt${i}_${j}`;
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'q' + i;
+            radio.value = opt;
+            radio.addEventListener('change', () => { quizAnswers[i] = opt; });
+            const span = document.createElement('span');
+            span.className = 'quiz-opt-text';
+            span.textContent = opt;
+            label.appendChild(radio);
+            label.appendChild(span);
+            optsDiv.appendChild(label);
+        });
+        card.appendChild(optsDiv);
+        container.appendChild(card);
+    });
+
+    $('quizOverlay').classList.add('on');
+}
+
+function submitQuiz() {
+    const unanswered = quizAnswers.filter(a => !a).length;
+    if (unanswered > 0 && !confirm(`You have ${unanswered} unanswered question(s). Submit anyway?`)) return;
+    socket.emit('quiz_answer', {
+        code: sessionCode,
+        answers: quizAnswers
+    });
+    $('submitQuizBtn').disabled = true;
+    $('submitQuizBtn').textContent = 'Submitting...';
+}
+
+function showQuizResult(data) {
+    $('quizQuestions').style.display = 'none';
+    $('submitQuizBtn').style.display = 'none';
+    $('closeQuizBtn').style.display = 'inline-flex';
+    const view = $('quizResultView');
+    view.style.display = 'block';
+
+    const pct = Math.round((data.score / data.total) * 100);
+    const color = pct >= 60 ? '#2D9F75' : '#D94F4F';
+    let html = `
+        <div class="quiz-score-hero">
+            <div class="quiz-score-circle" style="border-color:${color}">
+                <span class="quiz-score-num">${data.score}/${data.total}</span>
+                <span class="quiz-score-pct">${pct}%</span>
+            </div>
+            <div class="quiz-score-label">${pct >= 80 ? 'Excellent!' : pct >= 60 ? 'Good job!' : 'Keep studying!'}</div>
+        </div>
+        <div class="quiz-results-list">`;
+
+    data.results.forEach((r, i) => {
+        html += `
+            <div class="quiz-result-item ${r.correct ? 'correct' : 'wrong'}">
+                <span class="quiz-result-icon">${r.correct ? '✓' : '✗'}</span>
+                <span class="quiz-result-topic">${r.topic}</span>
+                ${!r.correct ? `<span class="quiz-result-answer">Answer: ${r.answer}</span>` : ''}
+            </div>`;
+    });
+    html += '</div>';
+    view.innerHTML = html;
+}
+
+function closeQuiz() {
+    $('quizOverlay').classList.remove('on');
+}
+
+function renderQuizScores(responses) {
+    const panel = $('quizScoresPanel');
+    if (panel) panel.style.display = 'block';
+    const body = $('quizScoresBody');
+    if (!body) return;
+    $('quizResponseCount').textContent = responses.length + ' responses';
+    body.innerHTML = '';
+    responses.sort((a, b) => b.score - a.score);
+    responses.forEach((r, i) => {
+        const pct = Math.round((r.score / r.total) * 100);
+        const color = pct >= 60 ? '#2D9F75' : '#D94F4F';
+        const row = document.createElement('div');
+        row.className = 'quiz-score-row';
+        row.innerHTML = `
+            <span class="quiz-score-rank">#${i+1}</span>
+            <span class="quiz-score-name">${r.name}</span>
+            <span class="quiz-score-val" style="color:${color}">${r.score}/${r.total} (${pct}%)</span>`;
+        body.appendChild(row);
+    });
+}
+
+// ── PDF Download ──
+function downloadPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const notesText = $('notesBody').innerText;
+    if (!notesText || notesText.includes('Notes generate automatically')) {
+        alert('No notes to download yet!');
+        return;
+    }
+
+    // Title
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AI Lecture Notes', 20, 20);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(120);
+    doc.text('Generated by Lecture Assistant', 20, 27);
+    doc.text(new Date().toLocaleString(), 20, 32);
+
+    // Notes content
+    doc.setFontSize(11);
+    doc.setTextColor(30);
+    const lines = doc.splitTextToSize(notesText, 170);
+    let y = 42;
+    lines.forEach(line => {
+        if (y > 280) {
+            doc.addPage();
+            y = 20;
+        }
+        // Bold for headings
+        if (line.startsWith('Topic') || line.startsWith('#')) {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+        } else {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(11);
+        }
+        doc.text(line, 20, y);
+        y += 6;
+    });
+
+    doc.save('lecture-notes.pdf');
+}
+
+// ── Enter key for student code input ──
+if ($('codeInput')) {
+    $('codeInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') joinSession();
+    });
+    $('codeInput').focus();
+}
+</script>
+</body>
+</html>

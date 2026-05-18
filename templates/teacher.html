@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teacher Dashboard — Lecture Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav class="navbar">
+    <div class="nav-left">
+        <span class="nav-brand">Lecture Assistant</span>
+        <span class="nav-badge teacher">Teacher</span>
+    </div>
+    <div class="nav-right">
+        <span class="nav-user">{{ name }}</span>
+        <a href="/logout" class="nav-logout">Sign out</a>
+    </div>
+</nav>
+
+<div class="app">
+    <div class="teacher-header">
+        <h2>Class Analytics</h2>
+        <p>Track student performance and identify areas for improvement</p>
+    </div>
+
+    <!-- Live Lecture CTA -->
+    <div class="live-cta-card" style="background:var(--bg-card);border:1px solid var(--border-light);border-radius:16px;padding:28px;margin-bottom:28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(26,29,28,0.04)">
+        <div style="display:flex;align-items:center;gap:16px">
+            <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:#FDE8E8;border-radius:12px">
+                <svg viewBox="0 0 24 24" width="22" height="22" stroke="#D94F4F" fill="none" stroke-width="1.5">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+            </div>
+            <div>
+                <div style="font-family:var(--serif);font-size:1.1rem;font-weight:400;color:var(--text)">Go Live</div>
+                <div style="font-size:0.8rem;color:var(--text-3)">Start a real-time lecture with live notes and emphasis</div>
+            </div>
+        </div>
+        <a href="/live" style="padding:10px 24px;background:var(--text);color:#fff;border-radius:50px;font-size:0.82rem;font-weight:600;text-decoration:none;font-family:var(--sans);transition:all 0.2s;display:inline-block">Start Live Lecture &rarr;</a>
+    </div>
+
+    <div class="stat-row" id="statRow">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div class="stat-num" id="nStudents">&mdash;</div>
+            <div class="stat-label">Students</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+            <div class="stat-num" id="nAttempts">&mdash;</div>
+            <div class="stat-label">Quiz Attempts</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+            <div class="stat-num" id="nAvg">&mdash;</div>
+            <div class="stat-label">Class Average</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div class="stat-num" id="nTopics">&mdash;</div>
+            <div class="stat-label">Topics Covered</div>
+        </div>
+    </div>
+
+    <!-- Topic Performance -->
+    <div class="result-section fade-in" id="topicSection" style="display:none">
+        <div class="section-head">Topic Performance</div>
+        <div class="section-card">
+            <div class="topic-chart" id="topicChart"></div>
+            <div class="topic-legend">
+                <span><span class="ldot" style="background:#2D9F75"></span> Strong (&ge; 60%)</span>
+                <span><span class="ldot" style="background:#D94F4F"></span> Needs work (&lt; 60%)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Student Table -->
+    <div class="result-section fade-in" id="tableSection" style="display:none">
+        <div class="section-head">Student Performance</div>
+        <div class="section-card table-wrap">
+            <table class="perf-table">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Avg Score</th>
+                        <th>Attempts</th>
+                        <th>Strong Topics</th>
+                        <th>Weak Topics</th>
+                        <th>Last Active</th>
+                    </tr>
+                </thead>
+                <tbody id="perfBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state" id="emptyState">
+        <h3>No quiz data yet</h3>
+        <p>Students need to take quizzes first. Share the link and have them log in to upload lectures and take quizzes.</p>
+        <div class="demo-creds">
+            <div class="cred-item"><span>Student 1:</span> student / student123</div>
+            <div class="cred-item"><span>Student 2:</span> priya / priya123</div>
+            <div class="cred-item"><span>Student 3:</span> rahul / rahul123</div>
+        </div>
+    </div>
+
+    <!-- Session History -->
+    <div class="history-section result-section fade-in">
+        <div class="section-head">Session History</div>
+        <div class="history-list" id="historyList">
+            <div class="history-empty" id="historyEmpty">No past sessions yet. Start a live lecture to begin!</div>
+        </div>
+    </div>
+
+    <!-- Upload for teacher -->
+    <div class="result-section fade-in" style="margin-top:40px">
+        <div class="section-head">Upload Lecture</div>
+        <div class="upload-zone" id="drop">
+            <div class="upload-icon">
+                <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+            </div>
+            <div class="upload-label">Upload a lecture to generate notes and quiz</div>
+            <div class="upload-hint">MP3, WAV, M4A &mdash; up to 100MB</div>
+            <input type="file" id="fin" accept="audio/*" style="display:none">
+            <span class="file-tag" id="ftag"></span>
+        </div>
+        <button class="btn-primary" id="go" disabled>Process Lecture</button>
+        <div class="progress-card" id="prog">
+            <div class="progress-dots"><div class="dot-bounce"></div><div class="dot-bounce"></div><div class="dot-bounce"></div></div>
+            <span class="progress-label" id="plabel">Processing...</span>
+            <div class="progress-bar"><div class="progress-fill" id="pfill"></div></div>
+        </div>
+        <div class="err-banner" id="err"></div>
+        <div class="teacher-results" id="out">
+            <div class="result-section">
+                <div class="section-head">Transcript</div>
+                <div class="section-card scrollable" id="txOut"></div>
+            </div>
+            <div class="result-section">
+                <div class="section-head">Notes</div>
+                <div class="section-card scrollable" id="ntOut"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+
+// Load session history
+async function loadHistory() {
+    try {
+        const r = await fetch('/api/sessions');
+        const d = await r.json();
+        const list = $('historyList');
+        if (!d.sessions || d.sessions.length === 0) return;
+        $('historyEmpty').style.display = 'none';
+        d.sessions.forEach((s, idx) => {
+            const card = document.createElement('div');
+            card.className = 'history-card';
+            const date = new Date(s.created_at).toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
+            const dur = s.duration ? Math.round(s.duration) + 's' : '\u2014';
+            card.innerHTML = `
+                <div class="history-card-top">
+                    <div class="history-card-title">Session #${s.code}</div>
+                    <span class="history-date">${date}</span>
+                </div>
+                <div class="history-meta">
+                    <span class="history-stat">${s.student_count} students</span>
+                    <span class="history-stat">${dur}</span>
+                    <span class="history-stat">${s.chunk_count} chunks</span>
+                    ${s.has_notes ? '<span class="history-badge notes">Notes</span>' : ''}
+                    ${s.has_quiz ? '<span class="history-badge quiz">Quiz Avg: ' + s.quiz_avg + '</span>' : ''}
+                </div>
+                <div class="history-expand" id="hexp${idx}">
+                    <div class="history-notes-preview" id="hnotes${idx}">Loading notes...</div>
+                    ${s.quiz_results && s.quiz_results.length > 0 ? `<div class="history-quiz-results"><strong style="font-size:0.78rem;color:var(--text-3)">Quiz Results</strong>${s.quiz_results.map(qr => `<div class="history-quiz-row"><span style="font-weight:600">${qr.name}</span><span style="font-weight:700;color:${(qr.score/qr.total*100)>=60?'var(--green)':'var(--red)'}">${qr.score}/${qr.total}</span></div>`).join('')}</div>` : ''}
+                </div>`;
+            card.onclick = async () => {
+                const exp = document.getElementById('hexp' + idx);
+                if (exp.classList.contains('open')) { exp.classList.remove('open'); return; }
+                exp.classList.add('open');
+                try {
+                    const nr = await fetch('/api/sessions/' + s.code + '/notes');
+                    const nd = await nr.json();
+                    document.getElementById('hnotes' + idx).innerHTML = nd.notes ? nd.notes.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>') : '<em>No notes</em>';
+                } catch(e) { document.getElementById('hnotes' + idx).textContent = 'Failed to load'; }
+            };
+            list.appendChild(card);
+        });
+    } catch(e) { console.error('History error:', e); }
+}
+loadHistory();
+
+// Analytics
+fetch('/api/analytics').then(r=>r.json()).then(d=>{
+    if(!d.students||d.students.length===0){$('emptyState').style.display='block';return}
+    $('nStudents').textContent=d.total_students;
+    $('nAttempts').textContent=d.total_attempts;
+    const allScores=d.students.map(s=>s.avg_score);
+    $('nAvg').textContent=allScores.length?Math.round(allScores.reduce((a,b)=>a+b,0)/allScores.length)+'%':'\u2014';
+    $('nTopics').textContent=d.topics.length;
+    document.querySelectorAll('.stat-card').forEach((c,i)=>setTimeout(()=>c.classList.add('pop'),i*80));
+
+    // Topic chart
+    if(d.topics.length){
+        $('topicSection').style.display='block';
+        const tc=$('topicChart');
+        d.topics.forEach(t=>{
+            const color=t.percentage>=60?'var(--green)':'var(--red)';
+            tc.innerHTML+=`<div class="topic-row"><div class="topic-name">${t.topic}</div><div class="topic-bar-wrap"><div class="topic-bar-bg"><div class="topic-bar-fill" style="width:${t.percentage}%;background:${color}"></div></div></div><div class="topic-pct" style="color:${color}">${t.percentage}%</div></div>`;
+        });
+    }
+
+    // Student performance table — FIXED: properly interpolating all values
+    $('tableSection').style.display='block';
+    const tb=$('perfBody');
+    d.students.forEach(s=>{
+        const avg=s.avg_score;
+        const color=avg>=60?'var(--green-light)':'var(--red-light)';
+        const tcolor=avg>=60?'var(--green)':'var(--red)';
+        const strongTags=s.strong_topics.map(t=>`<span class="topic-tag strong">${t}</span>`).join('');
+        const weakTags=s.weak_topics.map(t=>`<span class="topic-tag weak">${t}</span>`).join('');
+        tb.innerHTML+=`<tr>
+            <td style="font-weight:600">${s.name}</td>
+            <td><span class="score-pill" style="background:${color};color:${tcolor}">${avg}%</span></td>
+            <td>${s.attempts}</td>
+            <td>${strongTags || '<span style="color:var(--text-3);font-size:0.75rem">None yet</span>'}</td>
+            <td>${weakTags || '<span style="color:var(--text-3);font-size:0.75rem">None yet</span>'}</td>
+            <td style="color:var(--text-3);font-size:0.78rem">${s.last_attempt}</td>
+        </tr>`;
+    });
+
+    setTimeout(()=>document.querySelectorAll('.fade-in').forEach(el=>el.classList.add('visible')),200);
+}).catch(()=>{
+    $('emptyState').style.display='block';
+    document.querySelectorAll('.stat-card').forEach((c,i)=>setTimeout(()=>c.classList.add('pop'),i*80));
+});
+
+// Upload
+const drop=$('drop'),fin=$('fin');
+drop.onclick=()=>fin.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('over')};
+drop.ondragleave=()=>drop.classList.remove('over');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');if(e.dataTransfer.files.length)handleFile(e.dataTransfer.files[0])};
+fin.onchange=()=>{if(fin.files.length)handleFile(fin.files[0])};
+function handleFile(f){window._file=f;$('ftag').textContent=f.name;$('ftag').style.display='inline-block';drop.classList.add('has-file');$('go').disabled=false}
+$('go').onclick=async()=>{
+    if(!window._file)return;$('go').disabled=true;$('go').innerHTML='<span class="spin"></span>Processing...';$('err').classList.remove('on');$('prog').classList.add('on');$('pfill').style.width='20%';
+    const fd=new FormData();fd.append('audio',window._file);
+    try{const r=await fetch('/upload',{method:'POST',body:fd});$('pfill').style.width='90%';if(!r.ok)throw new Error((await r.json()).error||'Error');const d=await r.json();$('pfill').style.width='100%';
+    setTimeout(()=>{$('txOut').textContent=d.transcript;$('ntOut').innerHTML=d.notes.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');$('out').style.display='block';$('prog').classList.remove('on');$('go').textContent='Process Lecture';$('go').disabled=false;},200);
+    }catch(e){$('err').textContent=e.message;$('err').classList.add('on');$('prog').classList.remove('on');$('go').textContent='Process Lecture';$('go').disabled=false;}
+};
+</script>
+</body>
+</html>
