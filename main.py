@@ -33,7 +33,7 @@ except ImportError:
 ffmpeg_path = os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
 os.environ['PATH'] += os.pathsep + ffmpeg_path
 
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyCNRWmPjW_OiIPym0l5U14JcvcRZxGraCg')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'YOUR GEMINI API KEY')
 GEMINI_MODEL   = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
 client = genai.Client(api_key=GEMINI_API_KEY)
 
