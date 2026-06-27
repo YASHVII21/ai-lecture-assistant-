@@ -18,6 +18,7 @@ import librosa
 import yt_dlp
 import imageio_ffmpeg
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from google import genai
@@ -42,7 +43,16 @@ app.secret_key = os.getenv('SECRET_KEY', 'lect-asst-dev-key-2026')
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
-socketio = SocketIO(app, async_mode='eventlet', max_http_buffer_size=10 * 1024 * 1024)
+# Fix for HF Spaces / reverse proxy — lets Flask see the real HTTPS scheme
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# Session cookies that work on HF Spaces (HTTPS + SameSite)
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+
+socketio = SocketIO(app, async_mode='eventlet', max_http_buffer_size=10 * 1024 * 1024,
+                    cors_allowed_origins='*')
 
 os.makedirs('uploads', exist_ok=True)
 os.makedirs('data', exist_ok=True)
