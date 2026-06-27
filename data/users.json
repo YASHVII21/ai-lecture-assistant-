@@ -1,0 +1,10 @@
+{
+  "students": [
+    {"id": "s1", "name": "Yash Verma", "username": "student", "password": "student123"},
+    {"id": "s2", "name": "Priya Sharma", "username": "priya", "password": "priya123"},
+    {"id": "s3", "name": "Rahul Patel", "username": "rahul", "password": "rahul123"}
+  ],
+  "teachers": [
+    {"id": "t1", "name": "Dr. Kumar", "username": "teacher", "password": "teacher123"}
+  ]
+}
