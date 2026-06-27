@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+.eggs
+dist
+build
+
+# Local environment
+.env
+.venv
+venv
+env
+.conda
+
+# Uploads and user data (generated at runtime)
+uploads/
+data/
+
+# Large audio/video files
+*.mp3
+*.wav
+*.m4a
+*.mp4
+*.mkv
+*.webm
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docs / reports (not needed for runtime)
+docs/
+*.docx
+*.pdf
+
+# Test files
+test_*.py
+
+# Logs
+*.log
