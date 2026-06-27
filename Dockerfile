@@ -21,15 +21,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the Whisper "small" model so first request isn't slow
-# (downloads ~500MB into ~/.cache/whisper)
-RUN python -c "import whisper; whisper.load_model('small'); print('Whisper model ready.')"
-
 # Copy the rest of the app
 COPY . .
 
-# Create required runtime directories
-RUN mkdir -p uploads data
+# Create required runtime directories (use shell to ensure success)
+RUN mkdir -p /app/uploads /app/data && chmod 777 /app/uploads /app/data
 
 # HF Spaces requires port 7860
 ENV PORT=7860
