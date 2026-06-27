@@ -13,7 +13,7 @@ import numpy as np
 from collections import Counter
 from datetime import datetime
 
-import whisper
+from faster_whisper import WhisperModel
 import librosa
 import yt_dlp
 import imageio_ffmpeg
@@ -83,7 +83,7 @@ def safe_print(*args, **kwargs):
 
 WHISPER_MODEL_SIZE = os.getenv('WHISPER_MODEL', 'small')
 print(f'Loading Whisper ({WHISPER_MODEL_SIZE})...')
-whisper_model = whisper.load_model(WHISPER_MODEL_SIZE)
+whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device='cpu', compute_type='int8')
 print('Ready.')
 
 # common filler words to ignore in analysis
@@ -117,31 +117,32 @@ gender male female voice voices name names type types group groups
 
 # transcription - beam search gives noticeably better results than greedy
 def transcribe_audio(filepath):
-    result = whisper_model.transcribe(
+    raw_segments, _ = whisper_model.transcribe(
         filepath,
         language='en',
-        fp16=False,
         beam_size=5,
-        best_of=3,
-        temperature=(0.0, 0.2, 0.4, 0.6),
+        temperature=0.0,
         condition_on_previous_text=True,
         no_speech_threshold=0.5,
         compression_ratio_threshold=2.4,
-        logprob_threshold=-1.0,
+        log_prob_threshold=-1.0,
+        vad_filter=True,
     )
     segments = []
-    for seg in result.get('segments', []):
-        text = seg['text'].strip()
+    full_text_parts = []
+    for seg in raw_segments:
+        text = seg.text.strip()
         if not text or len(text) < 3:
             continue
         if re.match(r'^[.!?,;:\s]+$', text):
             continue
         segments.append({
             'text': text,
-            'start': seg['start'],
-            'end': seg['end'],
+            'start': seg.start,
+            'end': seg.end,
         })
-    return result['text'], segments
+        full_text_parts.append(text)
+    return ' '.join(full_text_parts), segments
 
 
 # ── Tone Analysis ──
@@ -836,8 +837,8 @@ def _process_chunk_in_background(code, chunk_path, sid):
 
         # 2. Whisper transcribe the chunk
         print(f"  [CHUNK] Running Whisper transcription...", flush=True)
-        result = whisper_model.transcribe(wav_path, language='en', fp16=False, condition_on_previous_text=True)
-        chunk_text = result.get("text", "").strip()
+        raw_segs, _ = whisper_model.transcribe(wav_path, language='en', condition_on_previous_text=True, vad_filter=True)
+        chunk_text = ' '.join([s.text.strip() for s in raw_segs]).strip()
 
         if not chunk_text:
             print(f"  [CHUNK] Whisper returned empty text, skipping", flush=True)
