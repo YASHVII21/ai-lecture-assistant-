@@ -22,6 +22,8 @@ env
 # Uploads and user data (generated at runtime)
 uploads/
 data/
+# BUT keep the default users so login works on first deploy
+!data/users.json
 
 # Large audio/video files
 *.mp3

@@ -47,6 +47,23 @@ socketio = SocketIO(app, async_mode='eventlet', max_http_buffer_size=10 * 1024 *
 os.makedirs('uploads', exist_ok=True)
 os.makedirs('data', exist_ok=True)
 
+# Seed default users if file is missing (e.g. first run on cloud deployment)
+_USERS_PATH = os.path.join('data', 'users.json')
+if not os.path.exists(_USERS_PATH):
+    _default_users = {
+        "students": [
+            {"id": "s1", "name": "Yash Verma",    "username": "student", "password": "student123"},
+            {"id": "s2", "name": "Priya Sharma",  "username": "priya",   "password": "priya123"},
+            {"id": "s3", "name": "Rahul Patel",   "username": "rahul",   "password": "rahul123"}
+        ],
+        "teachers": [
+            {"id": "t1", "name": "Dr. Kumar", "username": "teacher", "password": "teacher123"}
+        ]
+    }
+    with open(_USERS_PATH, 'w', encoding='utf-8') as _f:
+        json.dump(_default_users, _f, indent=2)
+    print("Seeded default users.json")
+
 # active live sessions keyed by 4-digit code
 live_sessions = {}
 
