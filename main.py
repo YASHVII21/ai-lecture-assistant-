@@ -1,5 +1,4 @@
-import eventlet
-eventlet.monkey_patch()
+import threading
 
 import os
 import re
@@ -51,8 +50,8 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 
-socketio = SocketIO(app, async_mode='eventlet', max_http_buffer_size=10 * 1024 * 1024,
-                    cors_allowed_origins='*')
+socketio = SocketIO(app, async_mode='threading', max_http_buffer_size=10 * 1024 * 1024,
+                    cors_allowed_origins='*', allow_upgrades=True)
 
 os.makedirs('uploads', exist_ok=True)
 os.makedirs('data', exist_ok=True)
@@ -1087,8 +1086,9 @@ def on_audio_chunk(data):
 
     print(f"  Saved chunk, spawning processing...", flush=True)
 
-    # Process in eventlet green thread (compatible with eventlet async mode)
-    eventlet.spawn(_process_chunk_in_background, code, chunk_path, request.sid)
+    # Process in background thread
+    t = threading.Thread(target=_process_chunk_in_background, args=(code, chunk_path, request.sid), daemon=True)
+    t.start()
 
 
 @socketio.on('end_session')
@@ -1154,7 +1154,7 @@ def on_request_notes(data):
             print(f"  Manual notes error: {e}", flush=True)
             socketio.emit('notes_update', {"notes": "_Notes generation failed (API limit). Try again in a minute._"}, room=code)
 
-    eventlet.spawn(gen_notes)
+    threading.Thread(target=gen_notes, daemon=True).start()
 
 
 @socketio.on('send_quiz')
@@ -1195,7 +1195,7 @@ def on_send_quiz(data):
             print(f"  Quiz generation error: {e}", flush=True)
             socketio.emit('quiz_status', {"error": "Quiz generation failed."}, room=sess.get('teacher_sid'))
 
-    eventlet.spawn(gen_quiz)
+    threading.Thread(target=gen_quiz, daemon=True).start()
 
 
 @socketio.on('quiz_answer')
