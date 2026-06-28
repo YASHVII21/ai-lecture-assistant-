@@ -51,7 +51,7 @@ app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 socketio = SocketIO(app, async_mode='threading', max_http_buffer_size=10 * 1024 * 1024,
-                    cors_allowed_origins='*', allow_upgrades=True)
+                    cors_allowed_origins='*')
 
 os.makedirs('uploads', exist_ok=True)
 os.makedirs('data', exist_ok=True)
